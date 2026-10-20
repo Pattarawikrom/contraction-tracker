@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Contraction Tracker</title>
+<meta name="theme-color" content="#17121A">
+<meta name="description" content="Track labour contractions: length, interval and the 5-1-1 rule (German, English, French)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+[hidden]{display:none!important} body{margin:0} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Layout: one calm column — big start/stop control on top, live stats, then the log of contractions */
+:root{
+  /* Dark is the default look; the header toggle switches to light and the choice is remembered */
+  --bg:#17121A; --surface:#211A25; --fg:#F2E9EE; --muted:#AE9CA7; --line:#352B39;
+  --accent:#E46D93; --accent-soft:#3A2230; --on-accent:#1A0F15;
+  --ok:#6BC79D; --warn:#E9A55A; --alert:#F0727E; --alert-soft:#3D1D22;
+  --f-display:"Segoe UI Variable Display","Segoe UI","Helvetica Neue",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Segoe UI","Helvetica Neue",Arial,ui-sans-serif,system-ui,sans-serif;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#F6F3F4; --surface:#FFFFFF; --fg:#2A1E25; --muted:#76646E; --line:#E6DDE1;
+  --accent:#B23A62; --accent-soft:#F6E1E8; --on-accent:#FFFFFF;
+  --ok:#2F7D5B; --warn:#B8640F; --alert:#C0303F; --alert-soft:#FBE3E5; color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.6rem;margin:0;letter-spacing:-.01em}
+.tools{display:flex;gap:8px;align-items:center}
+.theme{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;width:36px;height:34px;cursor:pointer;font-size:1rem;line-height:1}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.lang button{border:0;background:none;color:var(--muted);font:700 .8rem var(--f-body);letter-spacing:.06em;padding:7px 12px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.stage{display:flex;flex-direction:column;align-items:center;gap:14px;padding-block:8px}
+.status{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}
+.clock{font-family:var(--f-display);font-weight:500;font-size:clamp(3.2rem,16vw,4.6rem);font-variant-numeric:tabular-nums;line-height:1}
+.big{width:min(240px,70vw);aspect-ratio:1;max-width:100%;border-radius:50%;border:0;cursor:pointer;
+  background:var(--accent-soft);color:var(--accent);font:700 1.35rem var(--f-display);
+  box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 10%,transparent);transition:transform .15s,background .2s}
+.big:active{transform:scale(.97)}
+.big.on{background:var(--accent);color:var(--on-accent);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 22px color-mix(in srgb,var(--accent) 6%,transparent)}}
+@media (prefers-reduced-motion:reduce){.big.on{animation:none}}
+.since{color:var(--muted);font-size:.95rem;font-variant-numeric:tabular-nums;min-height:1.4em}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.stat{background:var(--surface);padding:12px 10px;text-align:center;min-width:0}
+.stat b{display:block;font-family:var(--f-display);font-size:1.5rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.hint{font-size:.8rem;color:var(--muted);margin:-12px 0 0;text-align:center}
+
+.banner{border-radius:12px;padding:12px 14px;font-size:.95rem;border-left:4px solid var(--alert);background:var(--alert-soft)}
+.banner strong{color:var(--alert)}
+
+.log h2{font-family:var(--f-display);font-size:1.1rem;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.log h2 small{font:400 .8rem var(--f-body);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;font-weight:700;padding:6px 4px;border-bottom:1px solid var(--line)}
+td{padding:10px 4px;border-bottom:1px solid var(--line)}
+td:last-child,th:last-child{text-align:right}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+.c-ok{color:var(--ok)} .c-warn{color:var(--warn)} .c-alert{color:var(--alert)}
+.empty{color:var(--muted);text-align:center;padding:24px 8px;border:1px dashed var(--line);border-radius:12px}
+
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{flex:1 1 140px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 .9rem var(--f-body);padding:11px 12px;border-radius:10px;cursor:pointer}
+.btn.danger{color:var(--alert)}
+.confirm{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--alert-soft);padding:10px 12px;border-radius:10px;font-size:.9rem}
+.confirm .btn{flex:0 1 auto}
+.note{font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:.85rem}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1 data-i="title">Contraction Tracker</h1>
+    <div class="tools">
+      <button class="theme" id="theme" type="button"></button>
+      <div class="lang" role="group" aria-label="Language">
+        <button id="l-de" data-l="de">DE</button><button id="l-en" data-l="en">EN</button><button id="l-fr" data-l="fr">FR</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="status" id="status"></div>
+    <div class="clock" id="clock">0:00</div>
+    <button class="big" id="big"></button>
+    <div class="since" id="since"></div>
+  </section>
+
+  <div class="stats">
+    <div class="stat"><b id="s-count">0</b><span data-i="sCount"></span></div>
+    <div class="stat"><b id="s-dur">–</b><span data-i="sDur"></span></div>
+    <div class="stat"><b id="s-int">–</b><span data-i="sInt"></span></div>
+  </div>
+  <p class="hint" data-i="hint"></p>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="log">
+    <h2><span data-i="log"></span><small id="sample-label" hidden data-i="sample"></small></h2>
+    <div id="table"></div>
+  </section>
+
+  <div class="actions" id="actions">
+    <button class="btn" id="undo" data-i="undo"></button>
+    <button class="btn" id="copy" data-i="copy"></button>
+    <button class="btn danger" id="reset" data-i="reset"></button>
+  </div>
+  <div class="confirm" id="confirm" hidden>
+    <span data-i="confirmQ"></span>
+    <button class="btn danger" id="yes" data-i="yes"></button>
+    <button class="btn" id="no" data-i="no"></button>
+  </div>
+
+  <p class="note" data-i="note"></p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const T={
+ de:{title:"Wehen-Tracker",toLight:"Heller Modus",toDark:"Dunkler Modus",start:"Wehe beginnt",stop:"Wehe vorbei",running:"Wehe läuft",pause:"Pause",ready:"Bereit",
+  since:"Letzte Wehe vor {t}",sCount:"Wehen / 1 h",sDur:"Ø Dauer",sInt:"Ø Abstand",hint:"Werte der letzten 60 Minuten",
+  log:"Protokoll",sample:"Beispieldaten",th:["Beginn","Dauer","Abstand"],empty:"Noch keine Wehen erfasst. Tippe auf „Wehe beginnt“, sobald eine Wehe einsetzt.",
+  undo:"Letzte löschen",copy:"Protokoll kopieren",reset:"Alles löschen",confirmQ:"Alle Einträge löschen?",yes:"Ja, löschen",no:"Abbrechen",
+  copied:"Kopiert",copyFail:"Kopieren nicht möglich",
+  b511:"<strong>5-1-1 erreicht:</strong> Wehen etwa alle 5 Minuten, je ca. 1 Minute lang, seit mindestens 1 Stunde. Melde dich bei deiner Hebamme oder im Kreißsaal.",
+  bTrend:"<strong>Regelmäßige Wehen:</strong> Abstand unter 5 Minuten. Behalte die nächste Stunde im Blick.",
+  note:"Dieser Tracker ersetzt keine medizinische Beratung. Bei Blasensprung, Blutungen, starken Dauerschmerzen oder weniger Kindsbewegungen sofort Hebamme, Klinik oder Notruf 112 kontaktieren. Die Daten bleiben nur in diesem Browser."},
+ en:{title:"Contraction Tracker",toLight:"Light mode",toDark:"Dark mode",start:"Contraction starts",stop:"Contraction ends",running:"Contraction",pause:"Resting",ready:"Ready",
+  since:"Last contraction {t} ago",sCount:"Per hour",sDur:"Avg length",sInt:"Avg interval",hint:"Based on the last 60 minutes",
+  log:"Log",sample:"Sample data",th:["Start","Length","Interval"],empty:"No contractions yet. Tap “Contraction starts” when one begins.",
+  undo:"Delete last",copy:"Copy log",reset:"Clear all",confirmQ:"Delete all entries?",yes:"Yes, delete",no:"Cancel",
+  copied:"Copied",copyFail:"Copy not available",
+  b511:"<strong>5-1-1 reached:</strong> contractions about every 5 minutes, about 1 minute long, for at least 1 hour. Call your midwife or labour ward.",
+  bTrend:"<strong>Regular contractions:</strong> interval under 5 minutes. Keep watching over the next hour.",
+  note:"This timer is no substitute for medical advice. If your waters break, you bleed, have constant severe pain or feel less movement, contact your midwife, hospital or emergency services right away. Data stays in this browser only."},
+ fr:{title:"Suivi des contractions",toLight:"Mode clair",toDark:"Mode sombre",start:"Début de contraction",stop:"Fin de contraction",running:"Contraction",pause:"Repos",ready:"Prête",
+  since:"Dernière contraction il y a {t}",sCount:"Par heure",sDur:"Durée moy.",sInt:"Écart moy.",hint:"Sur les 60 dernières minutes",
+  log:"Historique",sample:"Exemple",th:["Début","Durée","Écart"],empty:"Aucune contraction enregistrée. Appuie sur « Début de contraction » dès qu’elle commence.",
+  undo:"Supprimer la dernière",copy:"Copier l’historique",reset:"Tout effacer",confirmQ:"Effacer toutes les entrées ?",yes:"Oui, effacer",no:"Annuler",
+  copied:"Copié",copyFail:"Copie impossible",
+  b511:"<strong>Règle 5-1-1 atteinte :</strong> contractions toutes les 5 minutes environ, d’environ 1 minute, depuis au moins 1 heure. Appelle ta sage-femme ou la maternité.",
+  bTrend:"<strong>Contractions régulières :</strong> écart inférieur à 5 minutes. Surveille l’heure qui vient.",
+  note:"Cet outil ne remplace pas un avis médical. En cas de perte des eaux, de saignement, de douleur intense continue ou de moins de mouvements du bébé, contacte immédiatement ta sage-femme, la maternité ou le 15/112. Les données restent uniquement dans ce navigateur."}
+};
+const KEY="contraction-tracker-v1", $=id=>document.getElementById(id);
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+let saved=store.get(KEY);
+let lang=(saved&&saved.lang)||((navigator.language||"de").slice(0,2).match(/^(de|en|fr)$/)||["de"])[0];
+let list=(saved&&saved.list)||[];          // [{s:startMs,e:endMs|null}]
+let sample=!saved||!saved.list||saved.list.length===0;
+if(sample){ // marked example rows so the first view shows how the tracker reads
+  const now=Date.now(); list=[]; let t=now-62*60000;
+  [55,60,50,65,58,62,57,60,63,59,61,60].forEach((d,i)=>{list.push({s:t,e:t+d*1000});t+=[7,6.5,6,6,5.5,5,5,4.8,5,4.7,5,4.9][i]*60000;});
+}
+let theme=store.get("contraction-tracker-theme")==="light"?"light":"dark";
+function applyTheme(){
+  if(theme==="light")document.documentElement.setAttribute("data-theme","light");
+  else document.documentElement.removeAttribute("data-theme");
+  const m=document.querySelector('meta[name="theme-color"]'); if(m)m.content=theme==="light"?"#F6F3F4":"#17121A";
+  const b=$("theme"), lbl=theme==="light"?T[lang].toDark:T[lang].toLight;
+  b.textContent=theme==="light"?"\u263E":"\u2600"; b.title=lbl; b.setAttribute("aria-label",lbl);
+}
+const save=()=>{if(!sample)store.set(KEY,{lang,list})};
+
+const fmt=ms=>{const s=Math.max(0,Math.round(ms/1000));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
+const clock=ms=>new Date(ms).toLocaleTimeString(lang,{hour:"2-digit",minute:"2-digit"});
+const active=()=>list.length&&list[list.length-1].e==null;
+
+function stats(){
+  const now=Date.now(), done=list.filter(c=>c.e), hour=done.filter(c=>c.s>=now-3600000);
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const durs=hour.map(c=>c.e-c.s);
+  const ints=[];for(let i=1;i<done.length;i++)if(done[i].s>=now-3600000)ints.push(done[i].s-done[i-1].s);
+  return{count:hour.length,dur:avg(durs),int:avg(ints),span:hour.length?now-hour[0].s:0};
+}
+
+function render(){
+  const t=T[lang]; document.documentElement.lang=lang; document.title=t.title;
+  document.querySelectorAll("[data-i]").forEach(el=>el.textContent=t[el.dataset.i]);
+  applyTheme();
+  document.querySelectorAll(".lang button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.l===lang));
+  $("sample-label").hidden=!sample;
+  $("big").textContent=active()?t.stop:t.start; $("big").classList.toggle("on",!!active());
+  const st=stats();
+  $("s-count").textContent=st.count; $("s-dur").textContent=st.dur?fmt(st.dur):"–"; $("s-int").textContent=st.int?fmt(st.int):"–";
+  // 5-1-1: interval ≤ 5 min, length ≥ ~1 min (tolerance 45 s), sustained ≥ 1 h
+  const b=$("banner");
+  if(st.int&&st.int<=5.2*60000&&st.dur>=45000&&st.span>=55*60000&&st.count>=8){b.innerHTML=t.b511;b.hidden=false}
+  else if(st.int&&st.int<=5*60000&&st.count>=4){b.innerHTML=t.bTrend;b.hidden=false}
+  else b.hidden=true;
+  const rows=[...list].map((c,i)=>({c,i})).reverse();
+  if(!list.length){$("table").innerHTML=`<div class="empty">${t.empty}</div>`}
+  else $("table").innerHTML=`<table><thead><tr><th>#</th><th>${t.th[0]}</th><th>${t.th[1]}</th><th>${t.th[2]}</th></tr></thead><tbody>`+
+    rows.map(({c,i})=>{const d=c.e?c.e-c.s:null, iv=i?c.s-list[i-1].s:null;
+      const ic=iv==null?"":iv<=5*60000?"c-alert":iv<=10*60000?"c-warn":"c-ok";
+      return `<tr><td>${i+1}</td><td>${clock(c.s)}</td><td>${d==null?"…":fmt(d)}</td><td><span class="chip ${ic}">${iv==null?"–":fmt(iv)}</span></td></tr>`}).join("")+`</tbody></table>`;
+  $("undo").disabled=!list.length;
+  tick();
+}
+function tick(){
+  const t=T[lang], now=Date.now(), last=list[list.length-1];
+  if(active()){$("status").textContent=t.running;$("clock").textContent=fmt(now-last.s);$("since").textContent=""}
+  else if(last){$("status").textContent=t.pause;$("clock").textContent=fmt(now-last.s);$("since").textContent=t.since.replace("{t}",fmt(now-last.e))}
+  else{$("status").textContent=t.ready;$("clock").textContent="0:00";$("since").textContent=""}
+}
+let wake=null;
+async function keepAwake(){try{if(!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>wake=null)}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&list.length&&!sample)keepAwake()});
+
+$("big").onclick=()=>{
+  if(sample){list=[];sample=false}
+  const now=Date.now();
+  if(active())list[list.length-1].e=now; else list.push({s:now,e:null});
+  if(navigator.vibrate)try{navigator.vibrate(40)}catch(e){}
+  keepAwake(); save(); render();
+};
+$("undo").onclick=()=>{if(sample){list=[];sample=false}else list.pop();save();render()};
+$("reset").onclick=()=>{$("confirm").hidden=false;$("actions").hidden=true};
+$("no").onclick=()=>{$("confirm").hidden=true;$("actions").hidden=false};
+$("yes").onclick=()=>{list=[];sample=false;store.set(KEY,{lang,list});$("confirm").hidden=true;$("actions").hidden=false;render()};
+document.querySelectorAll(".lang button").forEach(b=>b.onclick=()=>{lang=b.dataset.l;store.set(KEY,{lang,list:sample?[]:list});render()});
+$("theme").onclick=()=>{theme=theme==="light"?"dark":"light";store.set("contraction-tracker-theme",theme);applyTheme()};
+function toast(m){const el=$("toast");el.textContent=m;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,1800)}
+$("copy").onclick=()=>{
+  const t=T[lang];
+  const txt=t.title+"\n"+t.th.join("\t")+"\n"+list.map((c,i)=>[clock(c.s),c.e?fmt(c.e-c.s):"…",i?fmt(c.s-list[i-1].s):"–"].join("\t")).join("\n");
+  // Inside the Android app the native bridge copies; in browsers the Clipboard API is used
+  if(window.AndroidBridge){try{AndroidBridge.copy(txt);toast(t.copied)}catch(e){toast(t.copyFail)}return}
+  if(!navigator.clipboard){toast(t.copyFail);return}
+  navigator.clipboard.writeText(txt).then(()=>toast(t.copied),()=>toast(t.copyFail));
+};
+// Service worker enables offline use and installation when served over http(s), e.g. GitHub Pages
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+render(); setInterval(tick,1000); setInterval(render,30000);
+</script>
+</body>
+</html>

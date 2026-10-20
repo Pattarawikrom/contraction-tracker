@@ -1,0 +1,16 @@
+{
+  "name": "Contraction Tracker",
+  "short_name": "Contractions",
+  "description": "Track labour contractions: length, interval and the 5-1-1 rule (German, English, French)",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17121A",
+  "theme_color": "#17121A",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

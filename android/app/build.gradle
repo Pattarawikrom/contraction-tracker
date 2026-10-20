@@ -1,0 +1,34 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "app.contractiontracker"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "app.contractiontracker"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // The app ships the same web files that run on GitHub Pages (../web is the single source).
+    sourceSets {
+        main {
+            assets.srcDirs = ["../../web"]
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
